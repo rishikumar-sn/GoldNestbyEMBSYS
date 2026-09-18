@@ -30,6 +30,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     try {
       final chosen = await ImagePicker().pickImage(source: source);
       if (chosen == null || !mounted) return;
+      if (!RegExp(
+        r'\.(png|jpe?g)$',
+        caseSensitive: false,
+      ).hasMatch(chosen.name)) {
+        setState(() => message = 'Choose a JPEG or PNG image.');
+        return;
+      }
       final data = await chosen.readAsBytes();
       if (data.length > 20 * 1024 * 1024) {
         setState(() => message = 'Choose an image smaller than 20 MB.');
@@ -254,6 +261,7 @@ class ResultReviewScreen extends StatefulWidget {
 class _ResultReviewScreenState extends State<ResultReviewScreen> {
   Map<String, dynamic>? result;
   Uint8List? annotated;
+  Map<int, Uint8List> crops = {};
   List<String> labels = [];
   final Map<int, String> selected = {};
   bool busy = false;
@@ -279,11 +287,24 @@ class _ResultReviewScreenState extends State<ResultReviewScreen> {
       final bytes = await widget.controller.authorizedBytes(
         '/api/v1/jobs/${widget.jobId}/artifacts/$artifact',
       );
+      final cropBytes = <int, Uint8List>{};
+      for (final rawItem in loaded['instances'] as List<dynamic>) {
+        final item = rawItem as Map<String, dynamic>;
+        final number = item['instance_number'] as int;
+        final crop =
+            (item['artifacts'] as Map<String, dynamic>)['crop'] as String;
+        cropBytes[number] = Uint8List.fromList(
+          await widget.controller.authorizedBytes(
+            '/api/v1/jobs/${widget.jobId}/artifacts/$crop',
+          ),
+        );
+      }
       if (!mounted) return;
       setState(() {
         result = loaded;
         labels = (taxonomy['labels'] as List<dynamic>).cast<String>();
         annotated = Uint8List.fromList(bytes);
+        crops = cropBytes;
         selected.clear();
         for (final item in (loaded['instances'] as List<dynamic>)) {
           final piece = item as Map<String, dynamic>;
@@ -337,6 +358,10 @@ class _ResultReviewScreenState extends State<ResultReviewScreen> {
     final pieces = data == null
         ? <dynamic>[]
         : data['instances'] as List<dynamic>;
+    final selectedCounts = <String, int>{};
+    for (final label in selected.values) {
+      selectedCounts[label] = (selectedCounts[label] ?? 0) + 1;
+    }
     final captured = data == null
         ? null
         : DateTime.tryParse(data['captured_at'] as String)?.toLocal();
@@ -367,16 +392,16 @@ class _ResultReviewScreenState extends State<ResultReviewScreen> {
                     ),
                   const SizedBox(height: 16),
                   Text(
-                    '${data['physical_jewel_count']} pieces',
+                    '${data['physical_jewel_count']} ${data['physical_jewel_count'] == 1 ? 'piece' : 'pieces'}',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   if (captured != null)
                     Text('Captured ${captured.toString().substring(0, 16)}'),
                   const SizedBox(height: 10),
+                  const Text('Type count'),
                   Wrap(
                     spacing: 8,
-                    children: (data['type_counts'] as Map<String, dynamic>)
-                        .entries
+                    children: selectedCounts.entries
                         .map(
                           (entry) =>
                               Chip(label: Text('${entry.key}: ${entry.value}')),
@@ -405,6 +430,16 @@ class _ResultReviewScreenState extends State<ResultReviewScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                if (crops[number] != null) ...[
+                                  Center(
+                                    child: Image.memory(
+                                      crops[number]!,
+                                      height: 125,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
                                 Text(
                                   'Piece $number',
                                   style: Theme.of(context)

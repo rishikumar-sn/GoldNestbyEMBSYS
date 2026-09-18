@@ -18,8 +18,12 @@ def main() -> None:
     parser.add_argument("--image", type=Path, required=True)
     parser.add_argument("--expected-count", type=int, required=True)
     args = parser.parse_args()
-    image_bytes = args.image.read_bytes()
-    mime = "image/png" if args.image.suffix.lower() == ".png" else "image/jpeg"
+    image_path = args.image.resolve()
+    image_bytes = image_path.read_bytes()
+    mime = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+    # Application settings deliberately use backend-relative paths. Set that
+    # base explicitly so invoking this file from the repository root is safe.
+    os.chdir(ROOT)
 
     with ExitStack() as cleanup:
         directory = cleanup.enter_context(TemporaryDirectory(prefix="goldnest-api-pipeline-"))
@@ -43,7 +47,12 @@ def main() -> None:
 
         cleanup.callback(get_engine().dispose)
 
-        command.upgrade(Config(str(ROOT / "alembic.ini")), "head")
+        alembic_config = Config(str(ROOT / "alembic.ini"))
+        # Alembic resolves ``script_location`` relative to the caller's current
+        # directory by default. This CLI is intentionally runnable from either
+        # the repository root or ``backend/``.
+        alembic_config.set_main_option("script_location", str(ROOT / "migrations"))
+        command.upgrade(alembic_config, "head")
         with get_session() as session:
             session.add(User(username="phase8", password_hash=hash_password("integration-test-password")))
             session.commit()
@@ -62,7 +71,7 @@ def main() -> None:
             assert created.status_code == 201, created.text
             job_id = created.json()["job_id"]
             upload = client.post(f"/api/v1/jobs/{job_id}/images", headers=auth,
-                                 files={"file": (args.image.name, image_bytes, mime)})
+                                 files={"file": (image_path.name, image_bytes, mime)})
             assert upload.status_code == 200, upload.text
             assert upload.json()["artifact"] == ("original.png" if mime == "image/png" else "original.jpg")
             submitted = client.post(f"/api/v1/jobs/{job_id}/submit", headers=auth)

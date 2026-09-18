@@ -1,0 +1,2412 @@
+PROJECT: Mobile Jewellery Analysis System — Version 1
+TARGET: Production-quality V1 running on a local PC + Android Flutter application
+DEVELOPMENT STYLE: PHASE-BY-PHASE IMPLEMENTATION WITH HARD VERIFICATION GATES
+
+IMPORTANT:
+This is NOT a throwaway prototype.
+
+Build cleanly enough that the backend can later move from:
+    Windows/Linux PC + SQLite + local storage
+
+to:
+    Linux cloud server + PostgreSQL + object storage + Redis/job workers
+
+without rewriting the Flutter application, API contract, AI pipeline, authentication,
+or business logic.
+
+Do NOT implement cloud deployment, Docker, iOS, stone analysis, stone classification,
+pseudo-labelling, or SigLIP2 fine-tuning in this task.
+
+Those are future projects.
+
+For this V1 we only need:
+
+1. Android Flutter application
+2. Local-network FastAPI backend running on Windows OR Linux
+3. User authentication
+4. Unique mobile-device registration
+5. SQLite database
+6. Local image/result storage
+7. LAN HTTPS encryption
+8. Background/jewellery separation using YOLOE as primary
+9. InSPyReNet as refinement/fallback
+10. Jewellery physical-instance counting
+11. Jewellery type classification using the EXISTING SigLIP2 ONNX implementation/files
+12. Single-jewellery mode
+13. Group-jewellery count/verification mode
+14. Professional Flutter UI
+15. APK build support
+16. Complete setup/run/download documentation
+
+
+==============================================================
+ABSOLUTE RULE: WORK PHASE BY PHASE
+==============================================================
+
+Do NOT try to write the entire project in one uncontrolled pass.
+
+Implement one phase, run its tests, fix all problems discovered in that phase,
+document what was completed, and ONLY THEN continue to the next phase.
+
+Do not ask the user for confirmation between phases unless there is a genuine
+external blocker that cannot be solved from the repository/environment.
+
+For every phase:
+
+1. Inspect the repository before changing code.
+2. State internally what files need to change.
+3. Implement that phase only.
+4. Run formatting/static checks where applicable.
+5. Run unit/integration tests for that phase.
+6. Actually execute the relevant component when possible.
+7. Fix errors before proceeding.
+8. Write/update:
+       docs/implementation/PHASE_<N>_REPORT.md
+9. Record:
+       - what was implemented
+       - tests executed
+       - test results
+       - remaining known limitations
+10. Only after PASS proceed to the next phase.
+
+Do NOT mark a phase complete merely because code was written.
+
+A phase is complete only when it has been executed/tested successfully.
+
+If an external dependency such as Flutter SDK, Android SDK, CUDA, or internet access
+is genuinely unavailable:
+    - finish everything that can be completed
+    - create exact validation commands
+    - clearly record BLOCKED EXTERNAL ENVIRONMENT
+    - do not fake a successful result.
+
+
+==============================================================
+FIRST ACTION — REPOSITORY AUDIT
+==============================================================
+
+Before creating or modifying substantial code:
+
+Inspect the complete project tree.
+
+The user has ALREADY created the backend model structure.
+
+Especially inspect:
+
+    backend/models/siglip2/
+
+BEFORE WRITING ANY SIGLIP CODE.
+
+The SigLIP files in this project's backend/models/siglip2 directory are the
+SOURCE OF TRUTH.
+
+The user's older SOP-monitoring-rpi repository contains an older taxonomy and
+must NOT be used to hardcode jewellery classes for this project.
+
+The user says this project has a simpler class taxonomy originating from their
+newer Weight-Scale-SOP implementation.
+
+Therefore:
+
+DO NOT hardcode assumptions such as:
+    bracelet
+    Bangle
+    Dollar chain
+    Mattal
+    Kasu Mala
+etc.
+
+unless those exact classes are present in the files currently under
+backend/models/siglip2/.
+
+Inspect:
+
+    *.py
+    *.onnx
+    *.json
+    *.npz
+    README files
+    configuration files
+
+Determine dynamically:
+
+    - SigLIP input preprocessing
+    - ONNX input name
+    - ONNX output names
+    - embedding dimension
+    - class taxonomy
+    - prompt structure
+    - group structure if any
+    - text embedding cache format
+    - gallery NPZ structure
+    - gallery threshold
+    - classification scoring
+    - rejection logic
+    - existing correction/gallery matching logic
+    - background/cropping assumptions
+
+Prefer REUSING the existing tested implementation rather than replacing it.
+
+Do not regenerate NPZ files unless:
+    1. they are missing, OR
+    2. the existing code explicitly requires rebuilding them.
+
+Do not silently download a different SigLIP model and replace the user's model.
+
+
+==============================================================
+EXPECTED HIGH-LEVEL REPOSITORY STRUCTURE
+==============================================================
+
+Preserve existing relevant files, but organize new code approximately as:
+
+project/
+│
+├── backend/
+│   │
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │
+│   │   ├── auth/
+│   │   ├── core/
+│   │   ├── db/
+│   │   ├── models_db/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   │   ├── storage/
+│   │   │   ├── queue/
+│   │   │   └── inference/
+│   │   │
+│   │   ├── ai/
+│   │   │   ├── yoloe/
+│   │   │   ├── inspyrenet/
+│   │   │   ├── siglip2/
+│   │   │   ├── preprocessing/
+│   │   │   └── pipeline/
+│   │   │
+│   │   ├── workers/
+│   │   └── main.py
+│   │
+│   ├── models/
+│   │   ├── yoloe/
+│   │   ├── inspyrenet/
+│   │   ├── siglip2/       <-- USER FILES; inspect and preserve
+│   │   └── _cache/
+│   │
+│   ├── runtime/
+│   │   ├── database/
+│   │   ├── storage/
+│   │   ├── logs/
+│   │   └── temp/
+│   │
+│   ├── certs/
+│   ├── scripts/
+│   ├── tests/
+│   ├── docs/
+│   ├── .env.example
+│   └── requirements files / pyproject
+│
+├── mobile/
+│   └── Flutter application
+│
+├── docs/
+│   ├── implementation/
+│   ├── BACKEND_SETUP.md
+│   ├── MOBILE_SETUP.md
+│   ├── MODEL_SETUP.md
+│   ├── LAN_SETUP.md
+│   ├── SECURITY.md
+│   └── TROUBLESHOOTING.md
+│
+└── README.md
+
+
+==============================================================
+PLATFORM REQUIREMENTS
+==============================================================
+
+Backend must work on:
+
+    Windows 10/11
+    Linux
+
+Preferred Python:
+    Python 3.11
+
+Do not make Linux-only assumptions.
+
+Use pathlib instead of manually constructing Windows/Linux path strings.
+
+Do not rely on:
+    bash-only functionality
+    /tmp
+    /home/*
+    Linux daemon services
+    fork-only multiprocessing
+
+Provide both:
+
+    *.ps1
+and
+    *.sh
+
+where setup/run helper scripts are appropriate.
+
+
+==============================================================
+VERSION 1 NETWORK DESIGN
+==============================================================
+
+NO:
+    Tailscale
+    Cloudflare
+    public internet server
+    company domain
+    router port forwarding
+
+V1 works only when:
+
+    Android phone
+          +
+    backend PC
+
+are connected to the same WLAN/LAN.
+
+Example:
+
+    Phone
+      │
+      │ local Wi-Fi
+      ▼
+    Wi-Fi router
+      │
+      ▼
+    Windows/Linux PC
+      │
+      ▼
+    FastAPI
+
+FastAPI must listen on the LAN interface:
+
+    0.0.0.0
+
+Use configurable HTTPS port, default:
+
+    8443
+
+Provide a utility that prints something like:
+
+    Backend available at:
+    https://192.168.1.25:8443
+
+The mobile application must contain a Server Settings screen where the user can
+configure:
+
+    server IP / hostname
+    server port
+
+Example:
+
+    https://192.168.1.25:8443
+
+Provide:
+
+    Test Connection
+
+button.
+
+The configured server address must be persisted.
+
+
+==============================================================
+LAN ENCRYPTION — REQUIRED
+==============================================================
+
+The user explicitly requested encrypted data exchange.
+
+Do NOT simply use plain HTTP for the release APK.
+
+Implement LAN TLS.
+
+Create:
+
+    backend/scripts/generate_lan_certificate.py
+
+It should generate:
+
+    backend/certs/server.crt
+    backend/certs/server.key
+
+Use a cryptographically secure key.
+
+Private key NEVER leaves backend PC.
+
+The Flutter application must use certificate pinning.
+
+IMPORTANT SECURITY RULE:
+
+Do NOT implement this:
+
+    badCertificateCallback = (...) => true
+
+That would make TLS effectively vulnerable to MITM.
+
+If a custom certificate callback is required for the self-signed LAN certificate,
+accept the certificate ONLY when its SHA-256 fingerprint exactly matches the
+configured/pinned server certificate.
+
+Provide a build/setup process that:
+
+    server.crt
+        ↓
+    compute SHA-256 fingerprint
+        ↓
+    include trusted fingerprint/certificate in Flutter build assets/config
+
+The private key must NEVER be included in Flutter.
+
+Allow insecure HTTP only through an explicit development configuration such as:
+
+    ALLOW_INSECURE_HTTP=true
+
+Release mode must default to false.
+
+
+==============================================================
+AUTHENTICATION
+==============================================================
+
+Implement real application authentication even though V1 is LAN-only.
+
+Use:
+
+    username/password login
+    Argon2 password hashing
+    JWT access token
+    rotating refresh token
+    device registration
+
+Never store raw passwords.
+
+Never store raw refresh tokens in SQLite.
+
+Store a secure hash of refresh tokens.
+
+Recommended defaults:
+
+    Access token:
+        ~15 minutes
+
+    Refresh token:
+        configurable, e.g. 30 days
+
+On refresh:
+
+    invalidate old refresh token
+    issue new refresh token
+
+Implement logout/revocation.
+
+Create backend CLI for creating users/admins, for example:
+
+    python -m app.cli create-user
+
+or equivalent.
+
+Do not ship a hardcoded username/password.
+
+
+==============================================================
+UNIQUE DEVICE REGISTRATION
+==============================================================
+
+Every Flutter installation must be treated as a unique device.
+
+On first successful login:
+
+Flutter generates a UUID such as:
+
+    installation_id
+
+Store it securely/persistently.
+
+Send:
+
+    installation_id
+    device platform
+    app version
+    optional device display name
+
+Backend creates a device record and returns:
+
+    device_id
+
+Associate refresh tokens with:
+
+    user_id
+    device_id
+
+Allow device revocation later.
+
+Do NOT use:
+
+    IMEI
+    serial number
+    hardware identifiers
+
+
+==============================================================
+FLUTTER TOKEN STORAGE
+==============================================================
+
+Use secure storage for:
+
+    access token
+    refresh token
+    device ID / installation credentials where appropriate
+
+Use Android Keystore-backed secure storage through an appropriate maintained
+Flutter package.
+
+Do not store authentication tokens in plain SharedPreferences.
+
+
+==============================================================
+DATABASE
+==============================================================
+
+V1 uses:
+
+    SQLite
+
+Do NOT use PostgreSQL in V1.
+
+However, use:
+
+    SQLAlchemy 2.x
+    Alembic migrations
+
+and database repositories/services so future migration to PostgreSQL is simple.
+
+Database URL must come from configuration.
+
+Example:
+
+    DATABASE_URL=sqlite:///...
+
+Avoid SQLite-specific business logic.
+
+SQLite-specific tuning must be isolated.
+
+Enable appropriate SQLite settings for concurrent API + worker use:
+
+    WAL mode
+    foreign keys
+    reasonable busy timeout
+
+Potential entities:
+
+    User
+    Device
+    RefreshToken
+    AnalysisJob
+    UploadedImage
+    JewelInstance
+    ClassificationResult
+    AuditEvent
+
+Store timestamps in UTC.
+
+
+==============================================================
+LOCAL STORAGE
+==============================================================
+
+V1 uses the local filesystem.
+
+Implement a StorageProvider abstraction.
+
+V1:
+
+    LocalStorageProvider
+
+Future:
+
+    S3StorageProvider
+
+but DO NOT implement S3 now.
+
+Store files under backend/runtime/storage, organized safely by IDs.
+
+Do not use user-provided filenames directly as filesystem paths.
+
+Preserve a high-quality sanitized copy of the captured image for future datasets.
+
+Remove privacy-sensitive EXIF such as:
+
+    GPS coordinates
+
+Correct image orientation using EXIF orientation before removing EXIF.
+
+Store:
+
+    sanitized original
+    working/inference image
+    masks when useful
+    isolated jewel crops
+    white-background classification crops
+    annotated result
+    result JSON
+
+Retention must be configurable.
+
+For V1 keep data by default because these images will later be useful for:
+
+    pseudo-labelling
+    stone region classification
+    SigLIP training
+
+Do NOT implement those projects now.
+
+
+==============================================================
+JOB ARCHITECTURE
+==============================================================
+
+AI inference must NOT run directly inside a long FastAPI request.
+
+Do NOT do:
+
+    POST /analyze
+       -> 20 second blocking inference
+       -> response
+
+Instead:
+
+    Phone
+      ↓
+    API
+      ↓
+    create AnalysisJob(status=QUEUED)
+      ↓
+    return job_id immediately
+      ↓
+    AI worker
+      ↓
+    result stored
+      ↓
+    Flutter polls status/result
+
+V1 does NOT need Redis.
+
+Implement a clean QueueProvider / JobRepository abstraction.
+
+V1 queue can use SQLite.
+
+Use ONE inference worker initially.
+
+Implement transactional job claiming:
+
+    QUEUED
+       ↓
+    PROCESSING
+       ↓
+    COMPLETED
+
+or:
+
+    FAILED
+
+Avoid processing the same job twice.
+
+Design queue abstraction so Redis/Dramatiq can replace it in cloud version.
+
+The mobile API must NOT change when queue implementation changes.
+
+
+==============================================================
+MODEL LOADING ARCHITECTURE
+==============================================================
+
+Do not load models per image.
+
+AI worker starts and initializes model services.
+
+Recommended:
+
+    YOLOE:
+        preload
+
+    SigLIP2 ONNX:
+        preload
+
+    cached embeddings/gallery:
+        preload
+
+    InSPyReNet:
+        preload if memory permits
+        OR lazy-load once on first fallback
+
+Make device selection configurable:
+
+    auto
+    cuda
+    cpu
+
+Detect CUDA when available.
+
+Fail gracefully to CPU if configured as auto.
+
+If InSPyReNet produces CUDA OOM:
+
+    log it
+    free relevant CUDA cache if safe
+    retry that fallback once on CPU
+
+Do not crash the entire worker.
+
+
+==============================================================
+MODEL DIRECTORY POLICY
+==============================================================
+
+ALL model files must live under:
+
+    backend/models/
+
+Avoid silent runtime model downloads.
+
+Create:
+
+    backend/models/models_manifest.yaml
+
+or equivalent.
+
+For every public model include:
+
+    model name
+    version/checkpoint
+    purpose
+    source project
+    source repository/Hugging Face ID
+    expected local filename
+    expected destination
+    license note
+    optional checksum if known
+
+Create:
+
+    backend/scripts/download_models.py
+    backend/scripts/verify_models.py
+
+
+==============================================================
+YOLOE
+==============================================================
+
+Use YOLOE open-vocabulary INSTANCE SEGMENTATION as primary jewellery separation.
+
+Start with:
+
+    yoloe-26s-seg.pt
+
+unless compatibility/environment inspection shows a justified reason to select
+another official YOLOE segmentation checkpoint.
+
+Text prompting is the first strategy.
+
+Make prompts configurable.
+
+Initial prompt configuration may use:
+
+    jewelry
+    gold jewelry
+
+Do NOT use YOLOE class label as the final jewellery type.
+
+YOLOE's job is:
+
+    find physical jewellery instances
+    segment jewellery
+    count physical pieces
+
+SigLIP determines jewellery type.
+
+Model downloading/preparation must use the official Ultralytics mechanism.
+
+IMPORTANT:
+
+Text-prompted YOLOE also requires its text encoder resources.
+
+The download/preparation script must perform a one-time model initialization and
+text prompt preparation so that all required text encoder assets are downloaded
+BEFORE normal server operation.
+
+Keep YOLOE model/text resources under:
+
+    backend/models/yoloe/
+
+or backend/models/_cache/
+
+Do not leave random downloaded model resources scattered throughout the repository
+or user home directory.
+
+If Ultralytics APIs force caching elsewhere, explicitly configure/cache/document it.
+
+
+==============================================================
+FUTURE YOLOE VISUAL PROMPT SUPPORT
+==============================================================
+
+DO NOT fully implement the user's jewellery visual prompt dataset pipeline now.
+
+But define the segmentation provider cleanly enough that future logic can become:
+
+    text prompt
+        ↓ failed
+    visual prompt
+        ↓ failed
+    InSPyReNet
+
+For V1:
+
+    text prompt
+        ↓
+    InSPyReNet fallback
+
+Visual prompt mode may have configuration/interface placeholders but should be disabled.
+
+
+==============================================================
+MULTIPLE YOLOE PROMPT DUPLICATION
+==============================================================
+
+If prompts include:
+
+    jewelry
+    gold jewelry
+
+the same physical jewellery object may appear more than once.
+
+Never derive physical count directly from the raw YOLOE predictions.
+
+Implement class/prompt-agnostic instance deduplication.
+
+Use evidence such as:
+
+    mask IoU
+    bounding-box IoU
+    containment
+    overlap
+    confidence
+
+Make thresholds configurable.
+
+For duplicates:
+
+    keep/merge the best physical instance
+
+Only after deduplication calculate:
+
+    physical_jewel_count
+
+
+==============================================================
+INSPYRENET
+==============================================================
+
+Use InSPyReNet as:
+
+    1. mask refinement when YOLOE finds an object but mask quality is poor
+    2. full-image fallback when YOLOE fails to locate jewellery
+
+Use the official InSPyReNet/transparent-background implementation.
+
+Default V1 checkpoint:
+
+    ckpt_fast.pth
+
+Store it:
+
+    backend/models/inspyrenet/ckpt_fast.pth
+
+Provide OPTIONAL support for:
+
+    ckpt_base.pth
+
+but do not require the heavier model for V1.
+
+Download from the official plemeri Hugging Face/repository source using the model
+download script.
+
+Use the supported Python API rather than shelling out to a CLI for every request.
+
+The integration should be conceptually:
+
+    Remover(
+        mode="fast",
+        device=...,
+        ckpt=<local checkpoint>
+    )
+
+and return a saliency/alpha mask that our own service post-processes.
+
+
+==============================================================
+YOLOE → INSPYRENET PIPELINE
+==============================================================
+
+For an uploaded image:
+
+    ORIGINAL HIGH-QUALITY IMAGE
+                ↓
+    create inference-size copy
+                ↓
+    YOLOE TEXT-PROMPT SEGMENTATION
+                ↓
+    deduplicate instances
+                ↓
+    validate masks
+                ↓
+       ┌────────┴────────┐
+       │                 │
+    good mask        poor mask
+       │                 │
+       │        crop original-resolution ROI
+       │           with padding
+       │                 ↓
+       │          InSPyReNet fast
+       │                 ↓
+       │          refined foreground
+       │                 │
+       └────────┬────────┘
+                ↓
+          FINAL INSTANCE MASK
+
+
+If YOLOE returns no valid instances:
+
+    full image
+       ↓
+    InSPyReNet fast
+       ↓
+    binary/saliency mask
+       ↓
+    connected components
+       ↓
+    filter noise
+       ↓
+    conservative component grouping
+       ↓
+    fallback jewellery instances
+
+IMPORTANT:
+
+InSPyReNet is not true instance segmentation.
+
+Therefore results derived from the full-image fallback must record:
+
+    segmentation_source = "inspyrenet_full_fallback"
+
+and counting confidence should be lower.
+
+Do not pretend an InSPyReNet connected-component count is equally reliable to
+YOLOE instance segmentation.
+
+
+==============================================================
+MASK QUALITY VALIDATION
+==============================================================
+
+Avoid assumptions that break bangles/rings.
+
+For example, do NOT reject a bangle simply because the foreground occupies a low
+percentage of its rectangular bounding box.
+
+Use conservative checks such as:
+
+    mask exists
+    mask area above absolute/relative minimum
+    detection confidence
+    extreme full-frame mask
+    severe fragmentation
+    invalid coordinates
+    obviously tiny noise
+
+All thresholds must live in configuration, not be spread as magic constants.
+
+
+==============================================================
+CROP CREATION
+==============================================================
+
+For every final jewel instance:
+
+1. return to ORIGINAL high-resolution image
+2. use final full-resolution mask
+3. find tight bounding box
+4. add configurable padding
+5. extract jewel
+6. preserve alpha/mask copy
+7. composite onto WHITE background
+8. square-pad while preserving aspect ratio
+
+Generate:
+
+    original crop
+    mask
+    transparent PNG if useful
+    standardized white-background classification image
+
+The standardized white-background image becomes the SigLIP input source.
+
+Do NOT alter the actual jewellery pixels unnecessarily through:
+    excessive saturation
+    artificial gold enhancement
+    heavy CLAHE
+etc.
+
+
+==============================================================
+SIGLIP2
+==============================================================
+
+Again:
+
+    backend/models/siglip2/
+
+IS THE SOURCE OF TRUTH.
+
+Inspect it BEFORE implementing the service.
+
+The user has already copied their current:
+
+    ONNX model
+    prompt configuration
+    text embedding cache NPZ
+    correction/gallery NPZ
+    and related SigLIP implementation files
+
+into this directory.
+
+Reuse them.
+
+Build a:
+
+    SiglipJewelleryClassifier
+
+adapter/service around the existing implementation.
+
+Do not change its classification taxonomy unless required to make the current
+implementation actually work.
+
+No old class list from previous repositories.
+
+For each isolated physical jewel:
+
+    standardized white crop
+        ↓
+    existing SigLIP image preprocessing
+        ↓
+    ONNX image encoder
+        ↓
+    image embedding
+        ↓
+    existing cached text embeddings
+        ↓
+    similarity scoring
+        ↓
+    existing gallery matching/correction logic
+        ↓
+    jewellery label
+
+Return at least:
+
+    predicted_label
+    confidence / existing score
+    top-k classes if existing logic supports it
+    gallery_match
+    gallery_similarity when available
+    classification warnings if appropriate
+
+If gallery NPZ is empty or unavailable:
+
+    classification must continue
+    gallery_match = false
+    log warning
+
+Do not crash.
+
+
+==============================================================
+INFERENCE DEVICE FOR SIGLIP
+==============================================================
+
+Use ONNX Runtime.
+
+Provider selection:
+
+    CUDAExecutionProvider if installed AND available
+    else CPUExecutionProvider
+
+Do not assume CUDA exists.
+
+Log providers actually used at worker startup.
+
+
+==============================================================
+SINGLE JEWELLERY MODE
+==============================================================
+
+Flutter home screen must have:
+
+    Analyze Single Jewellery
+
+Single mode means:
+
+    one photograph
+    expected physical count = 1
+
+If backend detects exactly one:
+
+    proceed normally
+
+If backend detects more than one:
+
+    DO NOT discard other objects.
+
+Return all instances and add warning:
+
+    Multiple jewellery pieces detected.
+    Single-item mode expected one object.
+
+UI must clearly display this.
+
+
+==============================================================
+GROUP JEWELLERY MODE
+==============================================================
+
+Second main option:
+
+    Count / Verify Group
+
+The user takes ONE photograph containing multiple jewellery pieces.
+
+Examples:
+
+    2 bangles + 2 earrings
+
+must mean:
+
+    total physical piece count = 4
+
+Do not group an earring pair into one unit.
+
+Do not infer "set count".
+
+Return:
+
+    Total detected physical pieces: 4
+
+and classify each instance separately.
+
+Example:
+
+    #1 Bangle
+    #2 Bangle
+    #3 Earring
+    #4 Earring
+
+Do not implement multiple photographs of the same jewellery item in V1.
+
+
+==============================================================
+INSTANCE ORDERING
+==============================================================
+
+Give each detected piece a stable jewel_instance_id.
+
+For human-readable display, create predictable ordering based on image geometry,
+for example:
+
+    top-to-bottom
+    then left-to-right
+
+or a suitable row-aware implementation.
+
+The same ordering must be used by:
+
+    result JSON
+    annotations
+    Flutter cards
+
+
+==============================================================
+RESULT IMAGE
+==============================================================
+
+Generate an annotated result image showing:
+
+    mask outline or translucent mask
+    instance number
+    SigLIP classification
+    classification confidence where meaningful
+
+Example:
+
+    [1] Bangle
+    [2] Bangle
+    [3] Earring
+    [4] Earring
+
+Do not permanently draw annotations on stored original.
+
+Store separate:
+
+    original
+    annotated
+
+
+==============================================================
+BACKEND API — VERSIONED
+==============================================================
+
+Use:
+
+    /api/v1/
+
+Suggested endpoints:
+
+    GET  /api/v1/health
+    GET  /api/v1/ready
+
+    POST /api/v1/auth/login
+    POST /api/v1/auth/refresh
+    POST /api/v1/auth/logout
+
+    POST /api/v1/devices/register
+    GET  /api/v1/devices/me
+
+    POST /api/v1/jobs
+    POST /api/v1/jobs/{job_id}/images
+    POST /api/v1/jobs/{job_id}/submit
+
+    GET  /api/v1/jobs/{job_id}
+    GET  /api/v1/jobs/{job_id}/result
+
+    GET  /api/v1/jobs/{job_id}/artifacts/{artifact_id}
+
+The exact endpoint structure may be improved if justified, but preserve:
+
+    create job
+    upload
+    queue
+    poll
+    fetch result
+
+rather than a blocking analysis endpoint.
+
+Require authentication for private resources.
+
+Never expose the runtime/storage directory directly as an unrestricted static folder.
+
+
+==============================================================
+JOB MODES
+==============================================================
+
+Persist:
+
+    SINGLE
+    GROUP
+
+in AnalysisJob.
+
+V1 supports exactly one uploaded input image per analysis job.
+
+Structure the database/API so additional images could be supported in a future
+version, but DO NOT implement multi-view analysis.
+
+
+==============================================================
+EXPECTED RESULT JSON
+==============================================================
+
+Use proper Pydantic schemas.
+
+Return information conceptually similar to:
+
+{
+  "job_id": "...",
+  "mode": "group",
+  "status": "completed",
+
+  "physical_jewel_count": 4,
+  "count_confidence": 0.91,
+
+  "instances": [
+    {
+      "instance_number": 1,
+
+      "bbox": {
+        "x1": ...,
+        "y1": ...,
+        "x2": ...,
+        "y2": ...
+      },
+
+      "segmentation": {
+        "source": "yoloe",
+        "confidence": 0.91,
+        "refined_with_inspyrenet": false
+      },
+
+      "classification": {
+        "label": "...",
+        "confidence": ...,
+        "gallery_match": false,
+        "gallery_similarity": ...
+      },
+
+      "artifacts": {
+        "crop": "...",
+        "mask": "..."
+      }
+    }
+  ],
+
+  "warnings": [],
+  "timings_ms": {
+    "yoloe": ...,
+    "inspyrenet": ...,
+    "siglip_total": ...,
+    "total": ...
+  },
+
+  "model_versions": {
+    "yoloe": "...",
+    "inspyrenet": "...",
+    "siglip": "..."
+  }
+}
+
+Adapt score names to existing SigLIP semantics.
+
+Do not call an arbitrary cosine similarity "probability" unless it actually is one.
+
+
+==============================================================
+MODEL TRACEABILITY
+==============================================================
+
+Every result should retain enough metadata for debugging:
+
+    YOLOE model version
+    prompts used
+    YOLOE thresholds
+    InSPyReNet model version
+    SigLIP ONNX filename/version
+    prompt configuration hash/version where practical
+    gallery/cache filename/version/hash where practical
+    inference provider
+    timings
+
+This will be important when models change later.
+
+
+==============================================================
+IMAGE UPLOAD SAFETY
+==============================================================
+
+Validate:
+
+    MIME type
+    actual image decode
+    image dimensions
+    maximum file size
+    supported formats
+
+Support at least:
+
+    JPG/JPEG
+    PNG
+
+HEIC support is optional unless environment libraries make it reliable.
+
+Never trust filename extension alone.
+
+Protect against decompression-bomb style images with sensible limits.
+
+
+==============================================================
+FLUTTER APPLICATION
+==============================================================
+
+Create a polished Material 3 Android application.
+
+Do not make a developer-looking UI.
+
+The design should look like an actual product.
+
+Screens:
+
+1. Splash / initialization
+2. Server setup
+3. Login
+4. Home
+5. Single jewellery capture
+6. Group jewellery capture
+7. Image preview / retake
+8. Uploading
+9. Processing/status
+10. Result
+11. Previous analyses/history
+12. Settings
+13. Device/account/logout
+
+
+==============================================================
+HOME UI
+==============================================================
+
+Primary actions:
+
+    Analyze Jewellery
+    Single Item
+
+and
+
+    Count / Verify Group
+    Multiple Items
+
+Use clear large action cards.
+
+Do not clutter the initial interface with model terminology like:
+
+    YOLOE
+    InSPyReNet
+    SigLIP
+
+Those belong in backend/debug information, not normal customer UI.
+
+
+==============================================================
+CAMERA
+==============================================================
+
+Use a maintained Flutter camera package.
+
+Capture high-quality still photographs.
+
+The backend should receive a high-quality image.
+
+After capture:
+
+    show full preview
+    Retake
+    Analyze
+
+Group mode also captures ONE photo, not multiple images.
+
+Allow optional gallery image selection if simple and stable, but camera capture is
+the primary workflow.
+
+
+==============================================================
+UPLOAD UX
+==============================================================
+
+Show useful status:
+
+    Preparing image
+    Uploading
+    Queued
+    Analyzing jewellery
+    Processing results
+
+Do NOT expose fake percentage progress when actual model progress is unknown.
+
+Use an indeterminate progress indicator where appropriate.
+
+
+==============================================================
+JOB POLLING
+==============================================================
+
+After submit:
+
+    receive job ID
+    poll job endpoint at reasonable interval
+
+Stop polling when:
+
+    completed
+    failed
+    cancelled if added
+
+Implement network timeout and retry with backoff.
+
+Do not accidentally create duplicate analysis jobs during retry.
+
+
+==============================================================
+RESULT UI — SINGLE
+==============================================================
+
+Display:
+
+    annotated image
+    detected piece count
+    jewellery type
+    classification score/confidence according to backend semantics
+
+If more than one object was detected:
+
+    show warning
+    display every object
+
+
+==============================================================
+RESULT UI — GROUP
+==============================================================
+
+Prominently display:
+
+    Total Pieces: N
+
+Then cards:
+
+    Jewel #1
+    [crop]
+    Type
+    confidence/score
+
+    Jewel #2
+    ...
+
+Allow opening annotated image.
+
+Cleanly indicate if an object's segmentation came from a lower-confidence fallback,
+but avoid overwhelming nontechnical users.
+
+
+==============================================================
+HISTORY
+==============================================================
+
+Because data is retained locally, provide a basic analysis history.
+
+Show:
+
+    timestamp
+    mode
+    thumbnail
+    physical count
+    summary
+
+History comes from backend, not only phone-local memory.
+
+Only show records belonging to the authenticated user unless admin behavior is
+explicitly implemented.
+
+
+==============================================================
+ERROR UX
+==============================================================
+
+Use user-friendly messages for:
+
+    server unavailable
+    login expired
+    upload failed
+    image invalid
+    no jewellery detected
+    AI analysis failed
+    backend processing timeout
+
+Do not display Python stack traces in Flutter.
+
+
+==============================================================
+LOGGING
+==============================================================
+
+Backend should have structured useful logs.
+
+Include correlation identifiers:
+
+    request_id
+    job_id
+    user_id when appropriate
+    device_id
+    inference stage
+
+Never log:
+
+    passwords
+    JWT tokens
+    refresh tokens
+
+Create rotating log files under:
+
+    backend/runtime/logs/
+
+
+==============================================================
+CONFIGURATION
+==============================================================
+
+Use environment configuration.
+
+Create:
+
+    .env.example
+
+Include settings such as:
+
+    APP_ENV
+    HOST
+    PORT
+
+    DATABASE_URL
+
+    STORAGE_ROOT
+
+    JWT_SECRET
+    ACCESS_TOKEN_MINUTES
+    REFRESH_TOKEN_DAYS
+
+    YOLOE_MODEL
+    YOLOE_DEVICE
+    YOLOE_PROMPTS
+    YOLOE_CONFIDENCE
+
+    INSPYRENET_MODEL
+    INSPYRENET_DEVICE
+    INSPYRENET_ENABLED
+
+    SIGLIP_MODEL_DIR
+    SIGLIP_PROVIDER
+
+    KEEP_UPLOADS
+    RETENTION_DAYS
+
+    TLS_CERT_PATH
+    TLS_KEY_PATH
+
+Never commit actual secrets.
+
+
+==============================================================
+CLOUD-READY ABSTRACTIONS
+==============================================================
+
+V1 implementation:
+
+    SQLite
+    LocalStorage
+    SQLite job queue
+    one AI worker
+    LAN FastAPI
+
+But separate interfaces/services so future migration can replace:
+
+    SQLite               → PostgreSQL
+    LocalStorage         → S3/Blob storage
+    SQLiteQueue          → Redis/Dramatiq
+    one worker           → multiple GPU workers
+    LAN IP               → api.company.com
+
+WITHOUT rewriting:
+
+    Flutter analysis workflow
+    API schemas
+    authentication flow
+    image pipeline
+    result format
+    core model services
+
+
+==============================================================
+DO NOT USE DOCKER IN V1
+==============================================================
+
+The user explicitly chose:
+
+    native Windows/Linux setup now
+
+Docker comes during cloud migration.
+
+Keep paths/config architecture container-friendly, but do not require Docker.
+
+
+==============================================================
+WINDOWS SETUP
+==============================================================
+
+Provide PowerShell scripts or clear equivalents:
+
+    backend/scripts/setup_windows.ps1
+    backend/scripts/run_api_windows.ps1
+    backend/scripts/run_worker_windows.ps1
+    backend/scripts/run_all_windows.ps1
+
+run_all may start API and worker in separate processes/windows.
+
+Document Windows Defender Firewall requirement for TCP 8443 on PRIVATE networks only.
+
+Do not open public/internet firewall scopes unnecessarily.
+
+
+==============================================================
+LINUX SETUP
+==============================================================
+
+Provide:
+
+    setup_linux.sh
+    run_api_linux.sh
+    run_worker_linux.sh
+    run_all_linux.sh
+
+Do not require systemd for V1.
+
+Optional systemd documentation can wait for cloud deployment.
+
+
+==============================================================
+MODEL DOWNLOAD SCRIPT
+==============================================================
+
+Create:
+
+    python backend/scripts/download_models.py
+
+It must:
+
+1. Create model directories.
+2. Download official YOLOE checkpoint.
+3. Prepare/download YOLOE text prompting resources.
+4. Download official InSPyReNet fast checkpoint.
+5. Optionally download base checkpoint through a flag.
+6. NEVER overwrite the user's SigLIP2 directory.
+7. Print what was downloaded and where.
+8. Be safe to rerun.
+9. Skip valid existing files.
+10. Give clear error messages.
+
+Then:
+
+    python backend/scripts/verify_models.py
+
+must verify:
+
+    YOLOE load
+    YOLOE text prompt initialization
+    InSPyReNet checkpoint availability/load
+    SigLIP ONNX presence/load
+    SigLIP required JSON/NPZ files
+    actual inference provider availability
+
+Print a clear model readiness table.
+
+
+==============================================================
+NO SILENT DOWNLOADS IN NORMAL SERVER OPERATION
+==============================================================
+
+After model setup:
+
+Normal production startup should not unexpectedly download gigabytes of assets.
+
+If a required model is missing:
+
+    startup readiness = false
+
+and print exact command:
+
+    python scripts/download_models.py
+
+instead of downloading silently.
+
+
+==============================================================
+BACKEND HEALTH
+==============================================================
+
+/health:
+    API process healthy
+
+/ready:
+    database healthy
+    storage writable
+    worker heartbeat recent
+    required models verified/worker ready
+
+Do not report READY when models failed to load.
+
+
+==============================================================
+WORKER HEARTBEAT
+==============================================================
+
+Have worker periodically update heartbeat state so API can distinguish:
+
+    worker running
+vs
+    jobs will never be processed
+
+SQLite-based implementation is fine for V1.
+
+
+==============================================================
+PHASE IMPLEMENTATION ORDER
+==============================================================
+
+Follow EXACTLY this broad order.
+
+
+--------------------------
+PHASE 0 — AUDIT & DESIGN
+--------------------------
+
+Inspect repository.
+
+Especially inspect:
+
+    backend/models/siglip2/
+
+Document:
+
+    discovered SigLIP taxonomy
+    model filenames
+    NPZ structures
+    reusable code
+    current project tree
+    conflicts/risks
+
+Create architecture documentation.
+
+NO AI implementation changes yet.
+
+Acceptance:
+
+    repository understood
+    no user model files damaged
+    architecture recorded
+
+
+--------------------------
+PHASE 1 — BACKEND FOUNDATION
+--------------------------
+
+Implement:
+
+    FastAPI
+    config
+    SQLAlchemy
+    Alembic
+    SQLite
+    base entities
+    local storage provider
+    logging
+    health endpoints
+
+Run backend on:
+
+    Windows/Linux-compatible code
+
+Tests:
+
+    DB creation
+    migrations
+    storage write/read
+    health endpoints
+
+
+--------------------------
+PHASE 2 — SECURITY & DEVICE AUTH
+--------------------------
+
+Implement:
+
+    users
+    password hashing
+    login
+    JWT
+    refresh rotation
+    logout
+    device registration
+    token revocation
+    secure API guards
+
+Implement LAN TLS generation.
+
+Tests:
+
+    valid login
+    wrong password
+    refresh
+    rotated token invalidation
+    logout
+    device association
+    unauthorized access rejection
+    HTTPS startup
+
+
+--------------------------
+PHASE 3 — ASYNC JOB SYSTEM
+--------------------------
+
+Implement:
+
+    jobs
+    image upload
+    submit
+    worker
+    job claiming
+    heartbeat
+    polling/result API
+
+For now use a dummy analysis function.
+
+Tests:
+
+    queued → processing → completed
+    failure handling
+    no duplicate processing
+    multiple queued jobs
+
+
+--------------------------
+PHASE 4 — MODEL MANAGEMENT
+--------------------------
+
+Implement:
+
+    models_manifest
+    download_models
+    verify_models
+    device detection
+    cache directories
+
+Do NOT modify SigLIP user's files.
+
+Actually verify downloads/loads when internet/environment permits.
+
+
+--------------------------
+PHASE 5 — YOLOE JEWELLERY INSTANCE SEGMENTATION
+--------------------------
+
+Implement:
+
+    YOLOE provider
+    configurable text prompts
+    masks
+    bounding boxes
+    deduplication
+    physical counting
+    annotated debug output
+
+Write standalone model test CLI:
+
+    python ... --image test.jpg
+
+that produces:
+
+    count
+    masks
+    annotated image
+    JSON
+
+Do NOT involve Flutter yet.
+
+
+--------------------------
+PHASE 6 — INSPYRENET FALLBACK
+--------------------------
+
+Implement:
+
+    ROI refinement
+    full-image fallback
+    connected components
+    fallback counting
+    source/confidence metadata
+
+Test independently.
+
+Then integrate:
+
+    YOLOE
+      ↓
+    quality gate
+      ↓
+    InSPyReNet where necessary
+
+
+--------------------------
+PHASE 7 — SIGLIP2 INTEGRATION
+--------------------------
+
+Use the existing user files.
+
+Create standardized jewel crop.
+
+Feed each physical jewel independently.
+
+Verify classification from a standalone CLI first.
+
+Then integrate:
+
+    image
+      ↓
+    segmentation
+      ↓
+    physical instances
+      ↓
+    white standardized crops
+      ↓
+    SigLIP
+      ↓
+    type per instance
+
+Test:
+
+    one object
+    multiple objects
+    empty gallery handling
+    CPU provider
+    CUDA provider if available
+
+
+--------------------------
+PHASE 8 — COMPLETE BACKEND PIPELINE
+--------------------------
+
+Connect complete worker:
+
+    uploaded image
+        ↓
+    YOLOE
+        ↓
+    InSPyReNet fallback/refinement
+        ↓
+    count
+        ↓
+    crop each
+        ↓
+    SigLIP
+        ↓
+    annotations
+        ↓
+    database
+        ↓
+    result API
+
+Measure per-stage timings.
+
+Run end-to-end API integration test using a real image.
+
+
+--------------------------
+PHASE 9 — FLUTTER FOUNDATION
+--------------------------
+
+Create Flutter Android application.
+
+Implement:
+
+    theme
+    server settings
+    HTTPS pinned client
+    login
+    device registration
+    secure token storage
+    API service
+    navigation
+
+Test server connection to LAN backend.
+
+
+--------------------------
+PHASE 10 — CAPTURE & ANALYSIS UI
+--------------------------
+
+Implement:
+
+    Single Item
+    Group
+    camera
+    preview
+    upload
+    processing
+    polling
+    results
+    annotations
+    history
+
+Test actual phone → PC communication over same WLAN.
+
+
+--------------------------
+PHASE 11 — ANDROID BUILD & HARDENING
+--------------------------
+
+Run:
+
+    flutter analyze
+    flutter test
+
+Build installable Android APK if SDK is available.
+
+At minimum:
+
+    debug APK
+
+Also provide documented release signing instructions.
+
+DO NOT commit:
+
+    keystore
+    passwords
+    signing credentials
+
+
+--------------------------
+PHASE 12 — FULL SYSTEM VERIFICATION
+--------------------------
+
+Test scenarios:
+
+A.
+    single jewellery
+    YOLOE succeeds
+    count = 1
+    SigLIP returns type
+
+B.
+    four physical items
+    group mode
+    count = 4
+    each classified independently
+
+C.
+    duplicate YOLOE prompt predictions
+    final physical count does NOT double
+
+D.
+    YOLOE poor mask
+    InSPyReNet refinement activates
+
+E.
+    YOLOE no detection
+    InSPyReNet fallback activates
+
+F.
+    no jewellery
+    appropriate response
+
+G.
+    backend unavailable
+    Flutter handles cleanly
+
+H.
+    bad credentials
+    rejected
+
+I.
+    expired access token
+    refresh works
+
+J.
+    revoked refresh token
+    rejected
+
+K.
+    two phones/users submit jobs
+    jobs remain correctly isolated
+
+L.
+    backend restart
+    SQLite data/history remains
+
+M.
+    worker restart
+    queue remains recoverable
+
+
+==============================================================
+TESTING REQUIREMENTS
+==============================================================
+
+Backend:
+
+    pytest
+    API integration tests
+    service unit tests
+
+Use test database/storage isolated from real runtime data.
+
+Mock AI for general API tests.
+
+Have separate model integration tests that can be skipped when checkpoints are absent.
+
+Flutter:
+
+    flutter analyze
+    flutter test
+    widget tests for key screens/services where sensible
+
+Do not claim GPU testing if no GPU was actually available.
+
+
+==============================================================
+PERFORMANCE
+==============================================================
+
+Capture timings separately:
+
+    upload/preprocess
+    YOLOE
+    InSPyReNet
+    SigLIP per item
+    annotation
+    total worker time
+
+Persist/use timings for diagnostics.
+
+Do not prematurely optimize by destroying code clarity.
+
+However:
+
+    model initialization must occur once
+    no repeated SigLIP text embedding generation
+    no repeated model loading
+    do not unnecessarily run InSPyReNet
+    crop from full-resolution original only when needed
+
+
+==============================================================
+GPU MEMORY
+==============================================================
+
+This PC may have a limited-memory NVIDIA GPU or CPU Only.
+
+Do not assume unlimited VRAM.
+
+Allow configuration such as:
+
+    YOLOE_DEVICE=cuda/CPU
+    INSPYRENET_DEVICE=cpu
+    SIGLIP_PROVIDER=CUDA/CPU
+
+or other combinations.
+
+This lets expensive fallback processing move to CPU if needed.
+
+
+==============================================================
+UI QUALITY
+==============================================================
+
+The application must look deliberate and professional.
+
+Use:
+
+    consistent Material 3 theme
+    spacing system
+    typography hierarchy
+    empty states
+    loading states
+    error states
+    result cards
+    rounded image previews
+    consistent iconography
+
+Avoid:
+
+    random colors
+    giant debug text
+    model terminology in normal screens
+    overflowing layouts
+    placeholder UI
+    developer-only buttons in production screens
+
+
+==============================================================
+FUTURE PROJECTS — DO NOT IMPLEMENT
+==============================================================
+
+Explicitly exclude:
+
+PROJECT A:
+    pseudo-labelling for custom jewellery segmentation
+
+PROJECT B:
+    stone-region candidate classification
+
+PROJECT C:
+    SigLIP2 vision encoder / attribute-head fine-tuning
+
+Also exclude:
+
+    stone analysis
+    VLM
+    jewellery risk scoring
+    cloud deployment
+    PostgreSQL deployment
+    Redis
+    Docker
+    iOS
+    multiple views of one jewellery item
+
+But keep architecture extensible enough for these later.
+
+
+==============================================================
+DOCUMENTATION
+==============================================================
+
+At completion create/update:
+
+README.md
+
+docs/BACKEND_SETUP.md
+docs/MOBILE_SETUP.md
+docs/MODEL_SETUP.md
+docs/LAN_SETUP.md
+docs/SECURITY.md
+docs/API.md
+docs/ARCHITECTURE.md
+docs/TROUBLESHOOTING.md
+
+MODEL_SETUP must explain:
+
+    YOLOE source
+    YOLOE text resources
+    InSPyReNet source
+    exact model folder paths
+    exact download commands/scripts
+    expected files
+    how SigLIP custom files are supplied
+    model verification
+
+LAN_SETUP must explain:
+
+    connect PC + Android to same router
+    identify PC IPv4 address
+    run backend
+    allow PRIVATE Windows firewall port
+    configure server address in app
+    test connection
+    TLS certificate/pinning setup
+
+Include equivalent Linux notes.
+
+
+==============================================================
+STARTUP EXPERIENCE
+==============================================================
+
+Aim for something approximately this simple after initial setup:
+
+WINDOWS:
+
+    .\scripts\run_all_windows.ps1
+
+LINUX:
+
+    ./scripts/run_all_linux.sh
+
+Console should clearly report:
+
+    Database................OK
+    Storage.................OK
+    TLS.....................OK
+    YOLOE...................OK
+    InSPyReNet..............OK
+    SigLIP2.................OK
+    Worker..................READY
+
+    LAN API:
+    https://192.168.x.x:8443
+
+
+==============================================================
+FINAL COMPLETION REPORT
+==============================================================
+
+Only after all achievable phases are complete, provide:
+
+1. Complete project tree summary
+2. Implemented features
+3. Model files required/present
+4. Backend run command
+5. Worker run command
+6. Combined run command
+7. LAN server address configuration instructions
+8. Android build command
+9. APK path if successfully built
+10. Tests executed and their actual results
+11. CPU/GPU environment actually tested
+12. Known limitations
+13. Items deliberately postponed
+14. Recommended next project/phase
+
+Do not say "everything works" unless end-to-end verification was actually performed.
+
+
+==============================================================
+IMPORTANT DEVELOPMENT PRINCIPLES
+==============================================================
+
+Do not replace good existing code without reason.
+
+Do not modify user model weights.
+
+Do not commit secrets.
+
+Do not silently swallow exceptions.
+
+Do not use bare except except at controlled outer boundaries.
+
+Use typed Python where practical.
+
+Use Pydantic request/response models.
+
+Use dependency injection/services instead of giant route functions.
+
+Keep AI-specific code out of FastAPI route handlers.
+
+Keep Flutter API logic outside widgets.
+
+Keep database logic outside AI services.
+
+Make thresholds/configuration centralized.
+
+Write maintainable code.
+
+This project must be understandable by another engineer later.
+
+
+==============================================================
+BEGIN
+==============================================================
+
+Start with PHASE 0.
+
+First inspect the repository and especially:
+
+    backend/models/siglip2/
+
+Then create:
+
+    docs/implementation/PHASE_0_REPORT.md
+
+Only after the repository/model audit is complete should implementation begin.
+
+Proceed automatically phase by phase, fixing each phase before continuing.

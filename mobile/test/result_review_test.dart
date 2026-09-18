@@ -17,6 +17,7 @@ class ReviewController extends AppController {
     'instances': <Map<String, dynamic>>[
       {
         'instance_number': 1,
+        'artifacts': <String, dynamic>{'crop': 'crop_1.png'},
         'classification': <String, dynamic>{'label': 'Bangle'},
       },
     ],
@@ -25,7 +26,9 @@ class ReviewController extends AppController {
   @override
   Future<Map<String, dynamic>> authorizedGet(String path) async =>
       path.endsWith('/labels')
-      ? <String, dynamic>{'labels': <String>['Bangle', 'Mattal']}
+      ? <String, dynamic>{
+          'labels': <String>['Bangle', 'Mattal'],
+        }
       : result;
 
   @override
@@ -56,6 +59,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Model prediction: Bangle'), 200);
     expect(find.text('Model prediction: Bangle'), findsOneWidget);
+    await tester.ensureVisible(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mattal').last);

@@ -146,6 +146,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: username,
                               textInputAction: TextInputAction.next,
+                              autocorrect: false,
+                              enableSuggestions: false,
                               decoration: const InputDecoration(
                                 labelText: 'Username',
                                 prefixIcon: Icon(Icons.person_outline),
@@ -446,7 +448,8 @@ class HomeScreen extends StatelessWidget {
           FilledButton.icon(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => AnalysisScreen(controller: controller, mode: 'single'),
+                builder: (_) =>
+                    AnalysisScreen(controller: controller, mode: 'single'),
               ),
             ),
             icon: const Icon(Icons.camera_alt_outlined),
@@ -456,7 +459,8 @@ class HomeScreen extends StatelessWidget {
           FilledButton.icon(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => AnalysisScreen(controller: controller, mode: 'group'),
+                builder: (_) =>
+                    AnalysisScreen(controller: controller, mode: 'group'),
               ),
             ),
             icon: const Icon(Icons.auto_awesome_mosaic_outlined),

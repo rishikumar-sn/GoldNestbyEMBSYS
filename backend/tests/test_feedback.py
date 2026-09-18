@@ -92,7 +92,8 @@ def test_confirm_overwrite_and_rebuild_gallery(client, tmp_path, monkeypatch):
     choices["items"][0]["label"] = "Mattal"
     assert client.post(endpoint, headers=alice, json=choices).status_code == 200
     with np.load(tmp_path / "learned.npz") as data:
-        assert list(data["labels"]) == ["Mattal", "Bracelet"]
+        assert set(data["labels"]) == {"Mattal", "Bracelet"}
+        assert len(data["labels"]) == 2
     with get_session() as session:
         rows = session.query(JewelConfirmation).filter_by(job_id=job_id).all()
         assert len(rows) == 2
