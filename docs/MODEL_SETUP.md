@@ -1,0 +1,5 @@
+# Model setup
+
+Run `python scripts/download_models.py` from `backend/` after installing `requirements-ai.txt`. It uses the [official Ultralytics YOLOE API](https://docs.ultralytics.com/models/yoloe/) to fetch `yoloe-26s-seg.pt` and prepare the prompt encoder under `backend/models/yoloe/`. The first `set_classes()` can install the Ultralytics CLIP package and download `mobileclip2_b.ts`; normal worker startup must use these local resources without a network request.
+
+The script downloads the official [plemeri InSPyReNet fast checkpoint](https://huggingface.co/plemeri/InSPyReNet/blob/main/ckpt_fast.pth) to `backend/models/inspyrenet/ckpt_fast.pth` and checks its published SHA-256. It also caches the SigLIP2 image processor under `backend/models/_cache/huggingface`. It never writes under `backend/models/siglip2/`, whose files are supplied by the user. Set `HF_HOME` to the cache parent before running the worker, then run `python scripts/verify_models.py --deep` to load the models. Review each upstream license before commercial use.

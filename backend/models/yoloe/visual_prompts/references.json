@@ -1,0 +1,19 @@
+{
+  "notes": "Example boxes are in reference-image pixel coordinates. Class IDs are temporary YOLOE visual groups, not jewellery type predictions. Test images are separate from these references.",
+  "references": [
+    {
+      "name": "earring_and_bangle",
+      "image": "group_reference.png",
+      "source": "UniversalDatasetCollector/Jewel_count/Jewel_count_20260825_150537_210_roi.png",
+      "bboxes": [[80, 36, 360, 223], [2, 488, 416, 891]],
+      "cls": [0, 1]
+    },
+    {
+      "name": "finger_ring",
+      "image": "ring_reference.png",
+      "source": "UniversalDatasetCollector/Rings/Rings_20260825_172552_348_roi.png",
+      "bboxes": [[338, 242, 525, 426]],
+      "cls": [0]
+    }
+  ]
+}

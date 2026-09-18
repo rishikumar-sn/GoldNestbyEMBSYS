@@ -1,0 +1,10 @@
+.venv/
+backend/.env
+backend/runtime/
+backend/certs/*.key
+backend/certs/*.crt
+backend/models/_cache/
+__pycache__/
+.pytest_cache/
+mobile/.dart_tool/
+mobile/build/

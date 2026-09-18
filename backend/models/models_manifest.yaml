@@ -1,0 +1,35 @@
+models:
+  yoloe:
+    name: YOLOE-26s segmentation
+    version: yoloe-26s-seg.pt
+    purpose: Open-vocabulary physical jewellery instance segmentation
+    source_project: Ultralytics YOLOE
+    source: https://docs.ultralytics.com/models/yoloe/
+    destination: models/yoloe/yoloe-26s-seg.pt
+    text_encoder: models/yoloe/mobileclip2_b.ts
+    license_note: Review the Ultralytics model and software license before commercial deployment.
+  inspyrenet_fast:
+    name: InSPyReNet fast
+    version: ckpt_fast.pth
+    purpose: Mask refinement and fallback foreground segmentation
+    source_project: plemeri/InSPyReNet
+    source: https://huggingface.co/plemeri/InSPyReNet/blob/main/ckpt_fast.pth
+    destination: models/inspyrenet/ckpt_fast.pth
+    sha256: e61ed7e85763dd83a796e1d650ea78604fff524121750858c54a6b560ac58c82
+    license_note: MIT per the Hugging Face checkpoint page; verify dependencies separately.
+  inspyrenet_base_optional:
+    name: InSPyReNet base
+    version: ckpt_base.pth
+    purpose: Optional higher-resolution foreground refinement
+    source_project: plemeri/InSPyReNet
+    source: https://huggingface.co/plemeri/InSPyReNet/blob/main/ckpt_base.pth
+    destination: models/inspyrenet/ckpt_base.pth
+    sha256: 0a6fe2a73ab0532d6d0b8d82849a9760a226df719e3063d09b4149ece6f80fcd
+    license_note: MIT per the Hugging Face checkpoint page; optional in V1.
+  siglip2:
+    name: Existing user-provided SigLIP2 ONNX
+    version: siglip2-base-patch32-256_vision_encoder.sim.onnx
+    purpose: Jewellery type classification
+    source_project: User-provided model implementation and files
+    destination: models/siglip2/siglip2-base-patch32-256_vision_encoder.sim.onnx
+    license_note: User-provided files; do not replace or regenerate.
